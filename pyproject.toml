@@ -16,6 +16,14 @@ tiktoken = "^0.4.0"
 
 [tool.poetry.group.dev.dependencies]
 jupyter = "^1.0.0"
+pandoc = "^2.3"
+nbconvert = {extras = ["pdf"], version = "^7.7.3"}
+
+
+[[tool.poetry.source]]
+name = "edge-python"
+url = "https://europe-python.pkg.dev/beamery-artifacts/beamery-edge-python/simple"
+priority = "secondary"
 
 [build-system]
 requires = ["poetry-core"]

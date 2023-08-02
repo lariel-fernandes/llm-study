@@ -3,9 +3,9 @@ import textwrap
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, asdict
 from enum import Enum
-from typing import List, Tuple, Any, Union, Optional, Type, Dict, Literal, Generic, TypeVar, Iterable
+from typing import List, Tuple, Any, Union, Optional, Type, Dict, Literal, Generic, TypeVar, Callable, Iterable
 
-from langchain import FewShotPromptTemplate, BasePromptTemplate
+from langchain import FewShotPromptTemplate, BasePromptTemplate, LLMChain
 from langchain import PromptTemplate
 from langchain.agents import Tool, AgentExecutor, BaseSingleActionAgent
 from langchain.callbacks.base import Callbacks
@@ -56,7 +56,7 @@ class KnowledgeSummarizer(BaseCombineDocumentsChain):
 
     def combine_docs(self, docs: List[Document], **kwargs: Any) -> Tuple[str, dict]:
         if not docs:
-            return "no information was found", {}
+            return "nothing relevant", {}
         notes = [f"NOTE #{i}:\n{d.page_content.strip()}" for i, d in enumerate(docs)]
         prompt = self.template.format(notes="\n\n".join(notes))
         return self.llm(prompt).strip(), {}
@@ -156,7 +156,7 @@ class RolePlayTool(Tool, Generic[A], ABC):
 
     @classmethod
     @abstractmethod
-    def create(cls) -> "RolePlayTool[A]":
+    def create(cls, name: Optional[str] = None, description: Optional[str] = None) -> "RolePlayTool[A]":
         pass
 
     @abstractmethod
@@ -167,10 +167,10 @@ class RolePlayTool(Tool, Generic[A], ABC):
 class DoNothingTool(RolePlayTool):
 
     @classmethod
-    def create(cls) -> RolePlayTool[NoAction]:
+    def create(cls, name: Optional[str] = None, description: Optional[str] = None) -> RolePlayTool[NoAction]:
         return cls(
-            name="Wait",
-            description="end the loop without doing or saying anything",
+            name=name or "Wait",
+            description=description or "end the loop without doing or saying anything",
             func=cls.default_func,
         )
 
@@ -181,10 +181,10 @@ class DoNothingTool(RolePlayTool):
 class SpeechTool(RolePlayTool):
 
     @classmethod
-    def create(cls) -> RolePlayTool[NoAction]:
+    def create(cls, name: Optional[str] = None, description: Optional[str] = None) -> RolePlayTool[NoAction]:
         return cls(
-            name="Say",
-            description="end the loop by saying something",
+            name=name or "Say",
+            description=description or "end the loop by saying something. Your interlocutor only sees this output",
             func=cls.default_func,
         )
 
@@ -195,10 +195,10 @@ class SpeechTool(RolePlayTool):
 class FreeActionTool(RolePlayTool):
 
     @classmethod
-    def create(cls) -> RolePlayTool[NoAction]:
+    def create(cls, name: Optional[str] = None, description: Optional[str] = None) -> RolePlayTool[NoAction]:
         return cls(
-            name="Do",
-            description="end the loop by doing something. describe what you do",
+            name=name or "Do",
+            description=description or "end the loop by doing something. describe what you do",
             func=cls.default_func,
         )
 
@@ -280,21 +280,20 @@ class NpcAgent(BaseSingleActionAgent):
                 func=lambda x: "OK",
             ),
             Tool(
-                name="Recall",
-                description="recall something from your memory or personality",
-                func=lambda x: npc.knowledge_base.query_summarized(x),
+                name="Search",
+                description="gather information to formulate your answer. Others won't see this information",
+                func=lambda x: "You know this: " + npc.knowledge_base.query_summarized(x).strip(),
             ),
         ]
 
     def create_template(self) -> BasePromptTemplate:
-        actions = '\n\t\t'.join([f"{t.name}: {t.description}" for t in self.tools])
         return FewShotPromptTemplate(
             prefix=textwrap.dedent(f"""
                 {{character_summary}}
 
                 Answer with your next action. You have access to the following actions:
 
-                {actions}
+                {{actions}}
 
                 Examples:
             """).strip(),
@@ -307,7 +306,7 @@ class NpcAgent(BaseSingleActionAgent):
                 Obs: {action_description}
                 {react_history}Act:
             """).strip(),
-            input_variables=["character_summary", "scene_summary", "action_description", "react_history"],
+            input_variables=["character_summary", "scene_summary", "action_description", "react_history", "actions"],
             example_separator="\n\n",
         )
 
@@ -342,6 +341,10 @@ class NpcAgent(BaseSingleActionAgent):
             scene_summary=kwargs["scene_summary"],
             action_description=kwargs["input_action"].action_description,
             react_history="" if not react_history else (react_history + "\n"),
+            actions='\n'.join([
+                f"{t.name}: {t.description}" for t in self.tools
+                if react_history or not isinstance(t, RolePlayTool)
+            ])
         )
         answer = self.llm(prompt)
         action = ReActUtils.extract_action(answer)
@@ -354,9 +357,8 @@ class NpcAgent(BaseSingleActionAgent):
         return action
 
 
-class SceneSummarizer(BaseModel):
-    llm: BaseLLM
-    template = PromptTemplate.from_template(textwrap.dedent("""
+class SceneSummarizer:
+    DEFAULT_PROMPT = PromptTemplate.from_template(textwrap.dedent("""
         I found myself in the following situation:
         {summary}
 
@@ -367,12 +369,28 @@ class SceneSummarizer(BaseModel):
         It should summarize concisely the situation and events mentioned above.
     """).strip())
 
+    output_key = "summary"
+
+    def __init__(
+        self,
+        llm: BaseLLM,
+        custom_prompt: Optional[BasePromptTemplate] = None,
+        chain_wrapper: Optional[Callable[[LLMChain], LLMChain]] = None,
+    ):
+        if custom_prompt:
+            assert set(custom_prompt.input_variables) == set(self.DEFAULT_PROMPT.input_variables)
+        self.chain = LLMChain(
+            llm=llm,
+            prompt=custom_prompt or self.DEFAULT_PROMPT,
+        )
+        if chain_wrapper:
+            self.chain = chain_wrapper(self.chain)
+
     def __call__(self, current_summary: str, new_events: Iterable[RolePlayAction]) -> str:
-        prompt = self.template.format(
+        return self.chain(dict(
             summary=current_summary.strip(),
             events="\n".join([m.action_description.strip() for m in new_events])
-        )
-        return self.llm(prompt).strip()
+        ))["text"].strip()
 
 
 class NpcScene:

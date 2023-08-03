@@ -22,8 +22,8 @@ class FreeFormAppWrapper:
     def __init__(self, fn: Callable):
         self._fn = fn
 
-    def _call(self, *args, **kwargs):
-        return self._fn(*args, **kwargs)
+    def _call(self, inputs: dict):
+        return self._fn(inputs=inputs)
 
 
 class FreeFormAppInstrument(Instrument):
@@ -43,10 +43,6 @@ class FreeFormAppInstrument(Instrument):
 
 
 class FreeFormApp(App):
-    """
-    A Basic app that makes little assumptions. Assumes input text and output text
-    """
-
     app: FreeFormAppWrapper
 
     root_callable: ClassVar[FunctionOrMethod] = Field(
@@ -74,9 +70,7 @@ class FreeFormApp(App):
     def __call__(self, *args, **kwargs):
         return self.call_with_record(*args, **kwargs)[0]
 
-    def call_with_record(self, *args, **kwargs):
-        assert len(args) == 1 and not kwargs or len(kwargs) >= 1 and not args, \
-            f"{self.__class__} accepts either a single positional argument or kwargs, not both"
+    def call_with_record(self, inputs: dict):
         # Wrapped calls will look this up by traversing the call stack
         record: Sequence[RecordAppCall] = []
 
@@ -90,7 +84,7 @@ class FreeFormApp(App):
         try:
             start_time = datetime.now()
             ret, cost = Endpoint.track_all_costs_tally(
-                lambda: self.app._call(*args, **kwargs)  # noqa
+                lambda: self.app._call(inputs=inputs)  # noqa
             )
             end_time = datetime.now()
 
@@ -101,9 +95,11 @@ class FreeFormApp(App):
 
         assert len(record) > 0, "No information recorded in call."
 
-        ret_record_args = {
-            "main_input": kwargs if kwargs else args[0]
-        }
+        main_input = inputs
+        if len(main_input) == 1:
+            main_input = list(main_input.values())[0]
+
+        ret_record_args = {"main_input": main_input}
 
         if ret is not None:
             ret_record_args['main_output'] = ret

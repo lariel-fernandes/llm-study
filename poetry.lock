@@ -4969,12 +4969,12 @@ vision = ["Pillow (<10.0.0)"]
 
 [[package]]
 name = "trulens-eval"
-version = "0.7.0"
+version = "0.9.0"
 description = "Library with langchain instrumentation to evaluate LLM based applications."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "trulens_eval-0.7.0-py3-none-any.whl", hash = "sha256:56d7b5acbb4aec4fc402de6ce2f3f269c1822712e3722a7ea2704d67ba8e624d"},
+    {file = "trulens_eval-0.9.0-py3-none-any.whl", hash = "sha256:279cdd4367879c4ed29707481604a779d0d8ce971c521b960e83449eaca11928"},
 ]
 
 [package.dependencies]
@@ -4984,7 +4984,7 @@ frozendict = ">=2.3.8"
 ipywidgets = ">=8.0.6"
 kaggle = ">=1.5.13"
 langchain = ">=0.0.230"
-llama-index = ">=0.7.0"
+llama-index = ">=0.7.16"
 merkle-json = ">=1.0.0"
 millify = ">=0.1.1"
 munch = ">=3.0.0"
@@ -5461,4 +5461,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9.8,<3.10"
-content-hash = "16f81fb5d7c4938ac04a963c71da42fad07225f25a54a36181964aaa8c7c5594"
+content-hash = "8ce30a4817562f0692bc3100bbc68bbec39b35c5f5b22d3bc986caf46ab29c10"

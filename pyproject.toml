@@ -12,7 +12,7 @@ langchain = "^0.0.247"
 faiss-cpu = "^1.7.4"
 openai = "^0.27.8"
 tiktoken = "^0.4.0"
-trulens-eval = "^0.7.0"
+trulens-eval = "0.9.0"
 marvin = "^1.2.1"
 
 [tool.poetry.group.dev.dependencies]
